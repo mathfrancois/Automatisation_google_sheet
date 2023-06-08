@@ -1,0 +1,80 @@
+function resultat_message() {
+  var feuille = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Console de traitements");
+  var derniereLigne = feuille.getLastRow();
+  var plageM = feuille.getRange("M1:M" + derniereLigne);
+  var plageN = feuille.getRange("N1:N" + derniereLigne);
+  var plageO = feuille.getRange("O1:O" + derniereLigne);
+  var plageQ = feuille.getRange("Q1:Q" + derniereLigne);
+  var plageR = feuille.getRange("R1:R" + derniereLigne);
+  var plageU = feuille.getRange("U1:U" + derniereLigne);
+  var valeursM = plageM.getValues();
+  var valeursN = plageN.getValues();
+  var valeursQ = plageQ.getValues();
+  var valeursO = plageO.getValues();
+  var valeursR = plageR.getValues();
+  var valeursU = [];
+  var colonneQ = feuille.getRange("Q1:Q");
+  var valeursColonneQ = colonneQ.getValues();
+
+  for (var i = 3; i < valeursM.length; i++) {
+    var message = valeursM[i][0]; // Colonne M
+    if (message !==""){
+      var valeurN = valeursN[i][0]; // Colonne N
+      let tag = valeursO[i][0]; // Colonne O
+      var tags = tag.split("\n");
+      var concatStr=[]
+      for (var j = 0; j < tags.length; j++) {
+        var currentTag = tags[j].trim();
+        if (currentTag !== "") {
+          concatStr.push(rechercherTag(currentTag, valeursQ, valeursR));
+        }
+      }
+      if (valeurN==true){
+        for (var n=0;n < concatStr.length;n++) {
+          var message=message.replace('[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}',concatStr[n])
+        }
+        ajouterLigneDansColonneU(message,i)
+      }
+      else if (valeurN==false){
+        ajouterLigneDansColonneU(concatStr,i)
+      }
+
+    }
+    
+  }
+}
+
+function ajouterLigneDansColonneU(valeur, ligne) {
+  var feuille = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Console de traitements");
+  var plageU = feuille.getRange("U" + (ligne+1)); 
+  plageU.setValue(valeur);
+}
+
+
+function rechercherTag(currentTag, valeursQ, valeursR) {
+   var requete = ""; 
+   var concat = ""; 
+  for (var k = 0; k < valeursQ.length; k++) {
+    if (currentTag == valeursQ[k][0]) {
+      requete = valeursR[k][0];
+      concat = extraireChaineConcat(requete);
+      return concat;
+    }
+  }
+} 
+
+
+function extraireChaineConcat(concatValue) {
+  const match = concatValue.match(/concat\((.*?)\)/i);
+  const concatString = match ? match[1] : '';
+  return concatString;
+}
+
+
+function detecterRegex(chaine) {
+  const regex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g;
+  const correspondances = chaine.match(regex) || [];
+  const nombreOccurrences = correspondances.length;
+  const positions = correspondances.map(match => chaine.indexOf(match));
+  
+  return { nombreOccurrences, positions };
