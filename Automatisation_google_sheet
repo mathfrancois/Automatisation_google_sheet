@@ -1,0 +1,129 @@
+# -*- coding: utf-8 -*-
+"""
+Spyder Editor
+
+This is a temporary script file.
+"""
+
+import pandas as pd 
+import psycopg2
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+
+chemin_vers_fichier=r'C:\Users\mfrancois-ext\Downloads\Surveillance des traitements ALICE - SCASO _ SCALANDES - Console de traitements.csv'
+
+df_console=pd.read_csv(chemin_vers_fichier)
+df_clean = df_console.fillna('')
+
+def compare_messages(message1, message2):
+    # Créer un vecteur de caractéristiques TF-IDF
+    vectorizer = TfidfVectorizer()
+    tfidf_matrix = vectorizer.fit_transform([message1, message2])
+
+    # Calculer la similarité cosinus entre les deux messages
+    similarity = cosine_similarity(tfidf_matrix[0], tfidf_matrix[1])[0][0]
+
+    return similarity
+
+# Informations de connexion à la base de données PostgreSQL
+host = "srhapvm-alicerdo003bdd.isocel.info"
+database = "rdo"
+user = "delta"
+password = "lzni7;:G"
+
+# Établir la connexion à la base de données
+conn = psycopg2.connect(
+    host=host,
+    database=database,
+    user=user,
+    password=password
+)
+
+# Créer un curseur pour exécuter les requêtes
+cur = conn.cursor()
+cur2 = conn.cursor()
+cur3=conn.cursor()
+
+# Exécuter une requête SELECT sur la table PostgreSQL
+cur.execute("SELECT ort.* FROM rdo_temp.objet_requete ort")
+cur2.execute("SELECT tl.* FROM rdo_temp.template_log tl")
+cur3.execute("SELECT tlor.* FROM rdo_temp.template_log_objet_requete tlor")
+
+
+# Récupérer les résultats de la requête
+results_objet_requete= cur.fetchall()
+results_message=cur2.fetchall()
+result_table_relation=cur3.fetchall()
+
+
+
+tag_objet_requete=[]
+uuid_objet_requete=[]
+identifiant_technique_message=[]
+
+for row in result_table_relation:
+    col1=row[0]
+    identifiant_technique_message.append(col1)
+for row in results_objet_requete:
+    # Accéder aux colonnes par leur index (0-indexé) ou leur nom
+    col1 = row[0]
+    col2 = row[1]
+    tag_objet_requete.append(col2)
+    uuid_objet_requete.append(col1)
+    
+uuid_message=[]
+message_table=[]
+    
+for row in results_message:
+    col1= row[0]
+    col2= row[1]
+    uuid_message.append(str(col1))
+    message_clean = col2.replace('\r', '').replace('\n', '')
+    message_table.append(message_clean)
+
+# Fermer le curseur et la connexion à la base de données
+cur.close()
+conn.close()
+
+table_relation=[]
+
+
+
+compteur=-1
+# Parcourir les résultats
+for message in df_clean["Table template_log (Table où l'on insère les messages)"]:
+    compteur+=1
+    if message=='' :
+        pass
+    else:
+        for j in range(0,len(message_table)) :
+            similarity_score = compare_messages(message, message_table[j])
+            if similarity_score >= 0.97:
+                uuid_du_message=uuid_message[j]
+                if uuid_du_message in identifiant_technique_message:
+                    pass
+                else:
+                    compteur2=-1
+                    for tag in df_clean['Table template_log_objet_requête\n(Table de relation)'][compteur].split():
+                        compteur2+=1
+                        for i in tag_objet_requete:
+                            if i==tag:
+                                indexe=tag_objet_requete.index(i)
+                                table_relation.append(uuid_du_message)
+                                table_relation.append(uuid_objet_requete[indexe])
+                                table_relation.append(compteur2)
+                            
+grande_requete="insert into rdo_temp.template_log_objet_requete (identifiant_template_log,identifiant_objet_requete,ordre) values"
+
+for i in range(0,len(table_relation),3):
+    groupe=table_relation[i:i+3]
+    chaine = "(" + ",".join([f"'{x}'" if index != 2 else str(x) for index, x in enumerate(groupe)]) + ")"
+    if i==0 :
+        grande_requete=grande_requete+" "+chaine
+    else:
+        grande_requete=grande_requete+","+chaine
+    
+if grande_requete=="insert into rdo_temp.template_log_objet_requete (identifiant_template_log,identifiant_objet_requete,ordre) values":
+    print("Tous les messages ont déjà été traités")
+else:
+    print(grande_requete)
